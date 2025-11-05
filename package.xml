@@ -1,0 +1,56 @@
+<?xml version="1.0"?>
+<package format="3">
+
+  <name>gazebo_gt_map_creator</name>
+
+  <version>1.0.0</version>
+
+  <description>
+    A standalone Ignition Gazebo plugin for creating 2D occupancy maps, 
+    3D point clouds, and octomaps from simulated environments. 
+    Provides ROS 2 service interface for map generation.
+    Based on gazebo_map_creator by arshadlab.
+  </description>
+
+  <maintainer email="kalhan.munasingarachchige.2023@ntu.ac.uk">Kalhan Boralessa</maintainer>
+
+  <license>Apache-2.0</license>
+
+  <url type="website">https://github.com/yourusername/gazebo_gt_map_creator</url>
+  <url type="bugtracker">https://github.com/yourusername/gazebo_gt_map_creator/issues</url>
+  <url type="repository">https://github.com/yourusername/gazebo_gt_map_creator</url>
+
+  <author email="kalhan.munasingarachchige.2023@ntu.ac.uk">Kalhan Boralessa</author>
+  <author>arshadlab (original gazebo_map_creator)</author>
+
+  <buildtool_depend>ament_cmake</buildtool_depend>
+  <buildtool_depend>ament_cmake_python</buildtool_depend>
+  <buildtool_depend>rosidl_default_generators</buildtool_depend>
+
+  <!-- ROS 2 dependencies -->
+  <depend>rclcpp</depend>
+  <depend>rclpy</depend>
+  <depend>geometry_msgs</depend>
+  
+  <exec_depend>rosidl_default_runtime</exec_depend>
+  
+  <member_of_group>rosidl_interface_packages</member_of_group>
+  
+  <!-- Ignition Gazebo dependencies -->
+  <depend>ignition-gazebo6</depend>
+  <depend>ignition-plugin1</depend>
+  <depend>ignition-rendering6</depend>
+  <depend>ignition-math6</depend>
+  <depend>sdformat12</depend>
+  
+  <!-- Map generation dependencies -->
+  <depend>libboost-dev</depend>
+  <depend>libpcl-dev</depend>
+  <depend>octomap</depend>
+  <depend>libpng-dev</depend>
+
+  <export>
+    <build_type>ament_cmake</build_type>
+  </export>
+
+</package>

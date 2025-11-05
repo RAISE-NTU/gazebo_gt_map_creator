@@ -1,0 +1,28 @@
+# Service request for creating maps from Ignition Gazebo simulation
+
+# Upper left corner of the map area (minimum X, maximum Y, maximum Z)
+geometry_msgs/Point upperleft
+
+# Lower right corner of the map area (maximum X, minimum Y, minimum Z)
+geometry_msgs/Point lowerright
+
+# Resolution of the map in meters per pixel
+float32 resolution
+
+# Threshold for 2D occupancy map (0-100) - Note: obstacles are always black for Nav2
+int32 threshold_2d
+
+# Output filename (without extension)
+string filename
+
+# Skip vertical scan for faster 2D-only mapping
+bool skip_vertical_scan
+
+# Range multiplier for ray casting
+float32 range_multiplier
+
+---
+# Service response
+
+# Success status
+bool success

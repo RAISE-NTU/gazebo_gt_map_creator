@@ -1,0 +1,3 @@
+# Ament environment hook for IGN_GAZEBO_SYSTEM_PLUGIN_PATH
+# This tells Ignition Gazebo where to find the map creator plugin library
+prepend-non-duplicate;IGN_GAZEBO_SYSTEM_PLUGIN_PATH;lib

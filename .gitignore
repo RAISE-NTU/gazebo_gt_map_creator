@@ -1,0 +1,34 @@
+# Build artifacts
+build/
+install/
+log/
+*.pyc
+__pycache__/
+
+# IDE
+.vscode/
+.idea/
+*.swp
+*.swo
+*~
+
+# OS
+.DS_Store
+Thumbs.db
+
+# ROS
+*.bag
+*.db3
+
+# Generated map files
+*.pgm
+*.yaml
+*.png
+*.pcd
+*.bt
+
+# CMake
+CMakeCache.txt
+CMakeFiles/
+cmake_install.cmake
+Makefile
