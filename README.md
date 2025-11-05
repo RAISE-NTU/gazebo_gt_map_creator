@@ -364,6 +364,8 @@ ros2 run gazebo_gt_map_creator save_map.py \
 
 The package includes a `maze.sdf` world file that demonstrates semantic labeling:
 
+![Maze Point Cloud with Semantic Labels](resource/semantic_labels.png)
+
 ```bash
 # 1. Launch the maze world
 ign gazebo $(ros2 pkg prefix gazebo_gt_map_creator)/share/gazebo_gt_map_creator/worlds/maze.sdf
