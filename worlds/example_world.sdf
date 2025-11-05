@@ -94,6 +94,9 @@
           </material>
         </visual>
       </link>
+      <plugin filename="gz-sim-label-system" name="gz::sim::systems::Label">
+        <label>10</label>
+      </plugin>
     </model>
     
     <!-- Box obstacle 2 -->
@@ -120,6 +123,9 @@
           </material>
         </visual>
       </link>
+      <plugin filename="gz-sim-label-system" name="gz::sim::systems::Label">
+        <label>20</label>
+      </plugin>
     </model>
     
     <!-- Cylinder obstacle -->
@@ -148,6 +154,9 @@
           </material>
         </visual>
       </link>
+      <plugin filename="gz-sim-label-system" name="gz::sim::systems::Label">
+        <label>30</label>
+      </plugin>
     </model>
     
     <!-- Wall -->
@@ -174,6 +183,9 @@
           </material>
         </visual>
       </link>
+      <plugin filename="gz-sim-label-system" name="gz::sim::systems::Label">
+        <label>40</label>
+      </plugin>
     </model>
     
   </world>

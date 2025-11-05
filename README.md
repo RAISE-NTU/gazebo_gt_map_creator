@@ -7,6 +7,7 @@ A standalone ROS 2 package for generating 2D occupancy maps, 3D point clouds, an
 - 🗺️ **2D Occupancy Maps**: Generate PGM and PNG maps compatible with Nav2
 - 🎯 **3D Point Clouds**: Export PCD format point clouds
 - 🧊 **Octomaps**: Create binary octomap (.bt) files
+- 🏷️ **Semantic Labels**: Capture object labels in point clouds (NEW!)
 - 📐 **Geometry-based Ray Casting**: Accurate collision detection using axis-aligned bounding boxes
 - ⚙️ **Configurable Parameters**: Adjust resolution, scanning area, and thresholds
 - 🚀 **ROS 2 Service Interface**: Easy integration with ROS 2 systems
@@ -263,6 +264,30 @@ If you only need a 2D map for navigation, set `skip_vertical_scan: true` to spee
 
 - Lower `threshold_2d` (e.g., 30): More conservative, marks more areas as occupied
 - Higher `threshold_2d` (e.g., 70): More permissive, marks fewer areas as occupied
+
+### 5. Capture Semantic Labels
+
+Enable semantic label capture for advanced applications:
+
+```bash
+# Add label plugins to your models in the world file
+<model name="obstacle_1">
+  <!-- ... model definition ... -->
+  <plugin filename="gz-sim-label-system" name="gz::sim::systems::Label">
+    <label>10</label>
+  </plugin>
+</model>
+
+# Generate map with semantic labels
+ros2 run gazebo_gt_map_creator save_map.py \
+  -f ~/maps/labeled_map \
+  -u -10 10 2 \
+  -l 10 -10 0 \
+  -r 0.05 \
+  --capture-labels
+```
+
+The generated PCD file will contain `PointXYZL` format with label information for each point. See [SEMANTIC_LABELS.md](SEMANTIC_LABELS.md) for detailed usage examples and applications.
 
 ## Troubleshooting
 

@@ -46,7 +46,8 @@ class MapCreatorClient(Node):
                    threshold_2d=50,
                    filename='map',
                    skip_vertical_scan=False,
-                   range_multiplier=1.5):
+                   range_multiplier=1.5,
+                   capture_semantic_labels=False):
         """
         Create a map from the simulation.
         
@@ -58,6 +59,7 @@ class MapCreatorClient(Node):
             filename: Output filename without extension (default: 'map')
             skip_vertical_scan: Skip 3D scanning for faster 2D maps (default: False)
             range_multiplier: Multiplier for ray casting range (default: 1.5)
+            capture_semantic_labels: Capture semantic labels in point cloud (default: False)
         
         Returns:
             Future object for the async service call
@@ -74,10 +76,12 @@ class MapCreatorClient(Node):
         request.filename = filename
         request.skip_vertical_scan = skip_vertical_scan
         request.range_multiplier = range_multiplier
+        request.capture_semantic_labels = capture_semantic_labels
         
         self.get_logger().info(f'Creating map with bounds: {upperleft} to {lowerright}')
         self.get_logger().info(f'Resolution: {resolution}m, Output: {filename}')
         self.get_logger().info(f'Skip vertical scan: {skip_vertical_scan}')
+        self.get_logger().info(f'Capture semantic labels: {capture_semantic_labels}')
         
         future = self.client.call_async(request)
         return future
@@ -135,6 +139,10 @@ Examples:
                         default=1.5,
                         help='Ray casting range multiplier (default: 1.5)')
     
+    parser.add_argument('--capture-labels', '-c',
+                        action='store_true',
+                        help='Capture semantic labels in point cloud (requires gz-sim-label-system plugin on models)')
+    
     # Parse arguments (filtering out ROS args)
     parsed_args = parser.parse_args()
     
@@ -146,6 +154,7 @@ Examples:
     threshold = parsed_args.threshold
     skip_vertical = parsed_args.skip_vertical_scan
     range_mult = parsed_args.range_multiplier
+    capture_labels = parsed_args.capture_labels
     
     # Initialize ROS
     rclpy.init(args=args)
@@ -160,6 +169,7 @@ Examples:
     print(f"Threshold: {threshold}")
     print(f"Skip vertical scan: {skip_vertical}")
     print(f"Range multiplier: {range_mult}")
+    print(f"Capture semantic labels: {capture_labels}")
     print("=" * 60)
     
     client = MapCreatorClient()
@@ -171,7 +181,8 @@ Examples:
         threshold_2d=threshold,
         filename=filename,
         skip_vertical_scan=skip_vertical,
-        range_multiplier=range_mult
+        range_multiplier=range_mult,
+        capture_semantic_labels=capture_labels
     )
     
     rclpy.spin_until_future_complete(client, future)
