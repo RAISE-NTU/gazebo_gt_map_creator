@@ -360,16 +360,33 @@ ros2 run gazebo_gt_map_creator save_map.py \
   # Don't use -s flag to enable 3D scanning
 ```
 
-### Maze World Example
+### Maze World with Semantic Labels
+
+The package includes a `maze.sdf` world file that demonstrates semantic labeling:
 
 ```bash
+# 1. Launch the maze world
+ign gazebo $(ros2 pkg prefix gazebo_gt_map_creator)/share/gazebo_gt_map_creator/worlds/maze.sdf
+
+# 2. Generate labeled map (outer walls: label 100, inner walls: label 200)
 ros2 run gazebo_gt_map_creator save_map.py \
-  -f $PWD/maze_map \
-  -u -6 6 2 \
-  -l 6 -6 0 \
+  -f $PWD/maze_labeled \
+  -u -5.5 5.5 1.5 \
+  -l 5.5 -5.5 0 \
   -r 0.05 \
-  -s
+  -s \
+  --capture-labels
+
+# 3. Visualize in RViz2 with color-coded labels
+ros2 run gazebo_gt_map_creator publish_pcd_to_rviz.py $PWD/maze_labeled.pcd &
+rviz2 -d $(ros2 pkg prefix gazebo_gt_map_creator)/share/gazebo_gt_map_creator/rviz/view_pointcloud.rviz
 ```
+
+The maze world demonstrates:
+- **Label 100**: Outer walls (4 walls forming the perimeter)
+- **Label 200**: Inner walls (4 separate obstacles inside the maze)
+- **Automatic color assignment**: Each label gets a unique color based on HSV color space
+- **RGB point cloud**: Compatible with RViz2's RGB8 color transformer
 
 ## Using Generated Maps with Nav2
 

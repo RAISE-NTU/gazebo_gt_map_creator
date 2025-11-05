@@ -102,6 +102,16 @@ install(DIRECTORY resource
   DESTINATION share/${PROJECT_NAME}
 )
 
+# Install world files
+install(DIRECTORY worlds
+  DESTINATION share/${PROJECT_NAME}
+)
+
+# Install RViz config
+install(DIRECTORY rviz
+  DESTINATION share/${PROJECT_NAME}
+)
+
 # Setup the environmental hooks for the Gazebo system plugin path
 ament_environment_hooks("${CMAKE_CURRENT_SOURCE_DIR}/hooks/gz_sim_system_plugin_path.dsv.in")
 
