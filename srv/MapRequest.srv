@@ -21,6 +21,9 @@ bool skip_vertical_scan
 # Range multiplier for ray casting
 float32 range_multiplier
 
+# Capture semantic labels in point cloud (requires gz-sim-label-system plugin on models)
+bool capture_semantic_labels
+
 ---
 # Service response
 

@@ -28,6 +28,7 @@
 #include <ignition/gazebo/components/Link.hh>
 #include <ignition/gazebo/components/Model.hh>
 #include <ignition/gazebo/components/Static.hh>
+#include <ignition/gazebo/components/SemanticLabel.hh>
 #include <ignition/gazebo/Util.hh>
 #include <ignition/gazebo/World.hh>
 #include <ignition/plugin/Register.hh>
@@ -83,8 +84,8 @@ public:
   /// Ray query object
   ignition::rendering::RayQueryPtr ray_query_{nullptr};
 
-  /// Collision bounding boxes cache
-  std::vector<std::pair<ignition::math::AxisAlignedBox, ignition::math::Pose3d>> collision_boxes_;
+  /// Collision bounding boxes cache with semantic labels
+  std::vector<std::tuple<ignition::math::AxisAlignedBox, ignition::math::Pose3d, uint32_t>> collision_boxes_;
 
   /// Initialize rendering for ray casting
   bool InitializeRendering();
@@ -104,6 +105,12 @@ public:
   bool CheckRayCollision(
     const ignition::math::Vector3d & start,
     const ignition::math::Vector3d & end);
+
+  /// Check for ray collision and return semantic label if hit
+  bool CheckRayCollisionWithLabel(
+    const ignition::math::Vector3d & start,
+    const ignition::math::Vector3d & end,
+    uint32_t & label);
 
   /// Check ray intersection with an axis-aligned box
   bool RayBoxIntersection(
@@ -199,6 +206,19 @@ void GazeboGtMapCreator::Implementation::BuildCollisionBoxes()
         }
       }
       
+      // Get semantic label from parent model
+      uint32_t semantic_label = 0;
+      auto link_entity = ecm_->Component<ignition::gazebo::components::ParentEntity>(entity);
+      if (link_entity) {
+        auto model_entity = ecm_->Component<ignition::gazebo::components::ParentEntity>(link_entity->Data());
+        if (model_entity) {
+          auto label_comp = ecm_->Component<ignition::gazebo::components::SemanticLabel>(model_entity->Data());
+          if (label_comp) {
+            semantic_label = label_comp->Data();
+          }
+        }
+      }
+      
       // Get the geometry
       const sdf::Geometry & geom = geometry->Data();
       
@@ -263,13 +283,13 @@ void GazeboGtMapCreator::Implementation::BuildCollisionBoxes()
         return true;
       }
       
-      collision_boxes_.push_back({bbox, world_pose});
+      collision_boxes_.push_back({bbox, world_pose, semantic_label});
       
       // Debug output for first few collisions
       if (collision_boxes_.size() <= 5) {
         RCLCPP_INFO(ros_node_->get_logger(), 
-          "Collision %zu: Type=%d, BBox=[%.2f,%.2f,%.2f]-[%.2f,%.2f,%.2f], Pose=[%.2f,%.2f,%.2f]",
-          collision_boxes_.size(), static_cast<int>(geom.Type()),
+          "Collision %zu: Type=%d, Label=%u, BBox=[%.2f,%.2f,%.2f]-[%.2f,%.2f,%.2f], Pose=[%.2f,%.2f,%.2f]",
+          collision_boxes_.size(), static_cast<int>(geom.Type()), semantic_label,
           bbox.Min().X(), bbox.Min().Y(), bbox.Min().Z(),
           bbox.Max().X(), bbox.Max().Y(), bbox.Max().Z(),
           world_pose.Pos().X(), world_pose.Pos().Y(), world_pose.Pos().Z());
@@ -340,8 +360,24 @@ bool GazeboGtMapCreator::Implementation::CheckRayCollision(
   const ignition::math::Vector3d & end)
 {
   // Check collision with all boxes
-  for (const auto & [box, pose] : collision_boxes_) {
+  for (const auto & [box, pose, label] : collision_boxes_) {
     if (RayBoxIntersection(start, end, box, pose)) {
+      return true;
+    }
+  }
+  
+  return false;
+}
+
+bool GazeboGtMapCreator::Implementation::CheckRayCollisionWithLabel(
+  const ignition::math::Vector3d & start,
+  const ignition::math::Vector3d & end,
+  uint32_t & label)
+{
+  // Check collision with all boxes and return the label of the first hit
+  for (const auto & [box, pose, box_label] : collision_boxes_) {
+    if (RayBoxIntersection(start, end, box, pose)) {
+      label = box_label;
       return true;
     }
   }
@@ -410,10 +446,19 @@ void GazeboGtMapCreator::Implementation::OnMapCreate(
   // Initially fill all area with empty pixel value
   boost::gil::fill_pixels(image._view, blank);
 
-  // Create a point cloud object
+  // Create point cloud objects - use labeled type if semantic labels are requested
   pcl::PointCloud<pcl::PointXYZ> cloud;
-  cloud.width = num_points_x;
-  cloud.height = num_points_y;
+  pcl::PointCloud<pcl::PointXYZL> labeled_cloud;
+  
+  if (req->capture_semantic_labels) {
+    labeled_cloud.width = num_points_x;
+    labeled_cloud.height = num_points_y;
+    RCLCPP_INFO(ros_node_->get_logger(), "Semantic label capture ENABLED");
+  } else {
+    cloud.width = num_points_x;
+    cloud.height = num_points_y;
+    RCLCPP_INFO(ros_node_->get_logger(), "Semantic label capture DISABLED");
+  }
 
   struct PointMask {
     int x, y, z;
@@ -452,7 +497,14 @@ void GazeboGtMapCreator::Implementation::OnMapCreate(
       ignition::math::Vector3d endV(cur_x, cur_y, req->upperleft.z);
 
       // Check vertical ray for collision
-      bool collision_detected = CheckRayCollision(startV, endV);
+      bool collision_detected = false;
+      uint32_t semantic_label = 0;
+      
+      if (req->capture_semantic_labels) {
+        collision_detected = CheckRayCollisionWithLabel(startV, endV, semantic_label);
+      } else {
+        collision_detected = CheckRayCollision(startV, endV);
+      }
 
       if (collision_detected) {
         image._view(x, y) = fill;
@@ -471,10 +523,23 @@ void GazeboGtMapCreator::Implementation::OnMapCreate(
           ignition::math::Vector3d end(cur_x + dx, cur_y + dy, cur_z + dz);
 
           // Perform ray collision check
-          collision_detected = CheckRayCollision(start, end);
+          if (req->capture_semantic_labels) {
+            collision_detected = CheckRayCollisionWithLabel(start, end, semantic_label);
+          } else {
+            collision_detected = CheckRayCollision(start, end);
+          }
 
           if (collision_detected) {
-            cloud.push_back(pcl::PointXYZ(cur_x, cur_y, cur_z));
+            if (req->capture_semantic_labels) {
+              pcl::PointXYZL point;
+              point.x = cur_x;
+              point.y = cur_y;
+              point.z = cur_z;
+              point.label = semantic_label;
+              labeled_cloud.push_back(point);
+            } else {
+              cloud.push_back(pcl::PointXYZ(cur_x, cur_y, cur_z));
+            }
             image._view(x, y) = fill;
             break;
           }
@@ -486,14 +551,31 @@ void GazeboGtMapCreator::Implementation::OnMapCreate(
   RCLCPP_INFO(ros_node_->get_logger(), "Completed calculations, writing to files");
 
   if (!req->filename.empty()) {
-    if (cloud.size() > 0) {
+    // Determine which point cloud to use
+    size_t cloud_size = req->capture_semantic_labels ? labeled_cloud.size() : cloud.size();
+    
+    if (cloud_size > 0) {
       // Save pcd file
-      pcl::io::savePCDFileASCII(req->filename + ".pcd", cloud);
+      if (req->capture_semantic_labels) {
+        pcl::io::savePCDFileASCII(req->filename + ".pcd", labeled_cloud);
+        RCLCPP_INFO(ros_node_->get_logger(), 
+          "Saved labeled point cloud with %zu points", labeled_cloud.size());
+      } else {
+        pcl::io::savePCDFileASCII(req->filename + ".pcd", cloud);
+        RCLCPP_INFO(ros_node_->get_logger(), 
+          "Saved point cloud with %zu points", cloud.size());
+      }
 
       // Save octomap file
       octomap::OcTree octree(req->resolution);
-      for (auto p : cloud.points) {
-        octree.updateNode(octomap::point3d(p.x, p.y, p.z), true);
+      if (req->capture_semantic_labels) {
+        for (const auto & p : labeled_cloud.points) {
+          octree.updateNode(octomap::point3d(p.x, p.y, p.z), true);
+        }
+      } else {
+        for (const auto & p : cloud.points) {
+          octree.updateNode(octomap::point3d(p.x, p.y, p.z), true);
+        }
       }
       octree.updateInnerOccupancy();
       octree.writeBinary(req->filename + ".bt");
