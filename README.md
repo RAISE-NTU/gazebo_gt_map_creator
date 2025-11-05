@@ -32,7 +32,6 @@ When you generate a map, the following files are created:
 ### Required
 - ROS 2 (Humble or later)
 - Ignition Gazebo (Fortress or later)
-- `gazebo_map_creator_interface` package
 - PCL (Point Cloud Library)
 - OctoMap
 - Boost (with GIL for image processing)
