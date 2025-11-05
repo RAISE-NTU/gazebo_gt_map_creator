@@ -28,6 +28,7 @@
 #include <ignition/gazebo/components/Link.hh>
 #include <ignition/gazebo/components/Model.hh>
 #include <ignition/gazebo/components/Static.hh>
+#include <ignition/gazebo/components/Visual.hh>
 #include <ignition/gazebo/components/SemanticLabel.hh>
 #include <ignition/gazebo/Util.hh>
 #include <ignition/gazebo/World.hh>
@@ -163,6 +164,25 @@ void GazeboGtMapCreator::Configure(
   RCLCPP_INFO(impl_->ros_node_->get_logger(), "Gazebo GT Map Creator plugin loaded for world: %s", impl_->world_name_.c_str());
 }
 
+void GazeboGtMapCreator::PreUpdate(
+  const ignition::gazebo::UpdateInfo & /*info*/,
+  ignition::gazebo::EntityComponentManager & ecm)
+{
+  // Enable SemanticLabel components for all models
+  ecm.Each<ignition::gazebo::components::Model,
+           ignition::gazebo::components::Name>(
+    [&](const ignition::gazebo::Entity & entity,
+        const ignition::gazebo::components::Model *,
+        const ignition::gazebo::components::Name *) -> bool
+    {
+      // Request the SemanticLabel component if it doesn't exist
+      if (!ecm.Component<ignition::gazebo::components::SemanticLabel>(entity)) {
+        ecm.CreateComponent(entity, ignition::gazebo::components::SemanticLabel(0));
+      }
+      return true;
+    });
+}
+
 void GazeboGtMapCreator::PostUpdate(
   const ignition::gazebo::UpdateInfo & /*info*/,
   const ignition::gazebo::EntityComponentManager & /*ecm*/)
@@ -206,16 +226,39 @@ void GazeboGtMapCreator::Implementation::BuildCollisionBoxes()
         }
       }
       
-      // Get semantic label from parent model
+      // Get semantic label from visual entities (labels are attached to visuals, not models)
       uint32_t semantic_label = 0;
       auto link_entity = ecm_->Component<ignition::gazebo::components::ParentEntity>(entity);
       if (link_entity) {
-        auto model_entity = ecm_->Component<ignition::gazebo::components::ParentEntity>(link_entity->Data());
-        if (model_entity) {
-          auto label_comp = ecm_->Component<ignition::gazebo::components::SemanticLabel>(model_entity->Data());
-          if (label_comp) {
-            semantic_label = label_comp->Data();
-          }
+        // Get all visual children of the link
+        ecm_->Each<ignition::gazebo::components::Visual,
+                   ignition::gazebo::components::Name,
+                   ignition::gazebo::components::ParentEntity>(
+          [&](const ignition::gazebo::Entity & visual_entity,
+              const ignition::gazebo::components::Visual *,
+              const ignition::gazebo::components::Name * visual_name,
+              const ignition::gazebo::components::ParentEntity * parent) -> bool
+          {
+            // Check if this visual belongs to our link
+            if (parent->Data() == link_entity->Data()) {
+              auto label_comp = ecm_->Component<ignition::gazebo::components::SemanticLabel>(visual_entity);
+              if (label_comp) {
+                semantic_label = label_comp->Data();
+                if (collision_boxes_.size() < 3) {
+                  RCLCPP_INFO(ros_node_->get_logger(), 
+                    "Visual '%s' has label: %u", visual_name->Data().c_str(), semantic_label);
+                }
+                return false;  // Found label, stop searching
+              }
+            }
+            return true;  // Continue searching
+          });
+        
+        if (semantic_label == 0 && collision_boxes_.size() < 3) {
+          auto link_name_comp = ecm_->Component<ignition::gazebo::components::Name>(link_entity->Data());
+          std::string link_name = link_name_comp ? link_name_comp->Data() : "unknown";
+          RCLCPP_WARN(ros_node_->get_logger(), 
+            "Link '%s' visuals have NO label component", link_name.c_str());
         }
       }
       
@@ -396,9 +439,21 @@ void GazeboGtMapCreator::Implementation::OnMapCreate(
   float size_y = req->lowerright.y - req->upperleft.y;  // size_y to be -ve
   float size_z = req->upperleft.z - req->lowerright.z;
 
+  RCLCPP_INFO(ros_node_->get_logger(), 
+    "Coordinates: upper_left=(%.2f, %.2f, %.2f), lower_right=(%.2f, %.2f, %.2f)",
+    req->upperleft.x, req->upperleft.y, req->upperleft.z,
+    req->lowerright.x, req->lowerright.y, req->lowerright.z);
+  RCLCPP_INFO(ros_node_->get_logger(), 
+    "Sizes: size_x=%.2f, size_y=%.2f, size_z=%.2f",
+    size_x, size_y, size_z);
+
   // Check for coordinate validity
-  if (size_x <= 0 || size_y >= 0 || size_z <= 0) {
-    RCLCPP_ERROR(ros_node_->get_logger(), "Invalid coordinates");
+  // size_x and size_y should be negative (upperleft < lowerright in those dims)
+  // size_z should be positive (upperleft > lowerright in Z)
+  if (size_x >= 0 || size_y >= 0 || size_z <= 0) {
+    RCLCPP_ERROR(ros_node_->get_logger(), 
+      "Invalid coordinates: size_x (%.2f) must be < 0, size_y (%.2f) must be < 0, size_z (%.2f) must be > 0",
+      size_x, size_y, size_z);
     res->success = false;
     return;
   }
@@ -447,17 +502,17 @@ void GazeboGtMapCreator::Implementation::OnMapCreate(
   boost::gil::fill_pixels(image._view, blank);
 
   // Create point cloud objects - use labeled type if semantic labels are requested
-  pcl::PointCloud<pcl::PointXYZ> cloud;
-  pcl::PointCloud<pcl::PointXYZL> labeled_cloud;
+  pcl::PointCloud<pcl::PointXYZRGB> cloud;
+  pcl::PointCloud<pcl::PointXYZRGB> labeled_cloud;
   
   if (req->capture_semantic_labels) {
     labeled_cloud.width = num_points_x;
     labeled_cloud.height = num_points_y;
-    RCLCPP_INFO(ros_node_->get_logger(), "Semantic label capture ENABLED");
+    RCLCPP_INFO(ros_node_->get_logger(), "Semantic label capture ENABLED - generating colored point cloud");
   } else {
     cloud.width = num_points_x;
     cloud.height = num_points_y;
-    RCLCPP_INFO(ros_node_->get_logger(), "Semantic label capture DISABLED");
+    RCLCPP_INFO(ros_node_->get_logger(), "Semantic label capture DISABLED - using default coloring");
   }
 
   struct PointMask {
@@ -480,6 +535,46 @@ void GazeboGtMapCreator::Implementation::OnMapCreate(
     ros_node_->get_logger(),
     "Starting map generation with %zu collision objects",
     collision_boxes_.size());
+
+  // Helper lambda to generate color from label
+  auto label_to_color = [](uint32_t label) -> std::tuple<uint8_t, uint8_t, uint8_t> {
+    if (label == 0) {
+      // Default gray for unlabeled objects
+      return {128, 128, 128};
+    }
+    
+    // Generate distinct colors using HSV to RGB conversion
+    // Distribute hue evenly based on label value
+    float hue = (label * 137.508f); // Use golden angle for better distribution
+    hue = fmod(hue, 360.0f);
+    float saturation = 0.8f;
+    float value = 0.9f;
+    
+    float c = value * saturation;
+    float x = c * (1.0f - fabs(fmod(hue / 60.0f, 2.0f) - 1.0f));
+    float m = value - c;
+    
+    float r, g, b;
+    if (hue < 60) {
+      r = c; g = x; b = 0;
+    } else if (hue < 120) {
+      r = x; g = c; b = 0;
+    } else if (hue < 180) {
+      r = 0; g = c; b = x;
+    } else if (hue < 240) {
+      r = 0; g = x; b = c;
+    } else if (hue < 300) {
+      r = x; g = 0; b = c;
+    } else {
+      r = c; g = 0; b = x;
+    }
+    
+    return {
+      static_cast<uint8_t>((r + m) * 255),
+      static_cast<uint8_t>((g + m) * 255),
+      static_cast<uint8_t>((b + m) * 255)
+    };
+  };
 
   for (int x = 0; x < num_points_x; ++x) {
     if (x % 10 == 0) {
@@ -531,14 +626,28 @@ void GazeboGtMapCreator::Implementation::OnMapCreate(
 
           if (collision_detected) {
             if (req->capture_semantic_labels) {
-              pcl::PointXYZL point;
+              pcl::PointXYZRGB point;
               point.x = cur_x;
               point.y = cur_y;
               point.z = cur_z;
-              point.label = semantic_label;
+              
+              // Set color based on semantic label
+              auto [r, g, b] = label_to_color(semantic_label);
+              point.r = r;
+              point.g = g;
+              point.b = b;
+              
               labeled_cloud.push_back(point);
             } else {
-              cloud.push_back(pcl::PointXYZ(cur_x, cur_y, cur_z));
+              pcl::PointXYZRGB point;
+              point.x = cur_x;
+              point.y = cur_y;
+              point.z = cur_z;
+              // Default white color for unlabeled points
+              point.r = 255;
+              point.g = 255;
+              point.b = 255;
+              cloud.push_back(point);
             }
             image._view(x, y) = fill;
             break;
@@ -559,11 +668,24 @@ void GazeboGtMapCreator::Implementation::OnMapCreate(
       if (req->capture_semantic_labels) {
         pcl::io::savePCDFileASCII(req->filename + ".pcd", labeled_cloud);
         RCLCPP_INFO(ros_node_->get_logger(), 
-          "Saved labeled point cloud with %zu points", labeled_cloud.size());
+          "Saved labeled colored point cloud with %zu points", labeled_cloud.size());
+        
+        // Count unique labels for statistics
+        std::unordered_map<uint32_t, size_t> label_counts;
+        for (const auto & p : labeled_cloud.points) {
+          // Reconstruct label from RGB (this is approximate, but gives an idea)
+          // In practice, we're using RGB encoding, so we'll track unique colors
+          uint32_t color_key = (static_cast<uint32_t>(p.r) << 16) | 
+                               (static_cast<uint32_t>(p.g) << 8) | 
+                               static_cast<uint32_t>(p.b);
+          label_counts[color_key]++;
+        }
+        RCLCPP_INFO(ros_node_->get_logger(), 
+          "Point cloud contains %zu unique colors/labels", label_counts.size());
       } else {
         pcl::io::savePCDFileASCII(req->filename + ".pcd", cloud);
         RCLCPP_INFO(ros_node_->get_logger(), 
-          "Saved point cloud with %zu points", cloud.size());
+          "Saved colored point cloud with %zu points", cloud.size());
       }
 
       // Save octomap file
