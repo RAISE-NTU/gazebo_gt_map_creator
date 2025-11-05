@@ -94,7 +94,7 @@
           </material>
         </visual>
       </link>
-      <plugin filename="gz-sim-label-system" name="gz::sim::systems::Label">
+      <plugin filename="ignition-gazebo-label-system" name="ignition::gazebo::systems::Label">
         <label>10</label>
       </plugin>
     </model>
@@ -123,7 +123,7 @@
           </material>
         </visual>
       </link>
-      <plugin filename="gz-sim-label-system" name="gz::sim::systems::Label">
+      <plugin filename="ignition-gazebo-label-system" name="ignition::gazebo::systems::Label">
         <label>20</label>
       </plugin>
     </model>
@@ -154,7 +154,7 @@
           </material>
         </visual>
       </link>
-      <plugin filename="gz-sim-label-system" name="gz::sim::systems::Label">
+      <plugin filename="ignition-gazebo-label-system" name="ignition::gazebo::systems::Label">
         <label>30</label>
       </plugin>
     </model>
@@ -183,7 +183,7 @@
           </material>
         </visual>
       </link>
-      <plugin filename="gz-sim-label-system" name="gz::sim::systems::Label">
+      <plugin filename="ignition-gazebo-label-system" name="ignition::gazebo::systems::Label">
         <label>40</label>
       </plugin>
     </model>

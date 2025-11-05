@@ -384,6 +384,35 @@ ros2 launch nav2_bringup navigation_launch.py \
   map:=/tmp/my_map.yaml
 ```
 
+## Visualizing Point Clouds in RViz2
+
+The plugin now generates **colored RGB point clouds** for visualization in RViz2!
+
+```bash
+# 1. Generate a colored map
+ros2 run gazebo_gt_map_creator save_map.py \
+  -f /tmp/colored_map \
+  -u -10 10 2 \
+  -l 10 -10 0 \
+  -r 0.05 \
+  --capture-labels
+
+# 2. Publish to RViz2
+ros2 run gazebo_gt_map_creator publish_pcd_to_rviz.py /tmp/colored_map.pcd
+
+# 3. Launch RViz2 with pre-configured settings
+rviz2 -d $(ros2 pkg prefix gazebo_gt_map_creator)/share/gazebo_gt_map_creator/rviz/view_pointcloud.rviz
+```
+
+**Key Settings for RViz2**:
+- Fixed Frame: `map`
+- Topic: `/point_cloud`
+- Color Transformer: **RGB8** (important for seeing colors!)
+- Style: Flat Squares
+- Size: 0.05m
+
+See [RVIZ_VISUALIZATION.md](RVIZ_VISUALIZATION.md) for complete documentation and troubleshooting.
+
 ## License
 
 This project is licensed under the Apache License 2.0 - see the [LICENSE](LICENSE) file for details.

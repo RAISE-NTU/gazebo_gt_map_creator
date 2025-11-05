@@ -88,7 +88,13 @@ install(DIRECTORY include/
 # Install Python scripts
 install(PROGRAMS
   scripts/save_map.py
+  scripts/publish_pcd_to_rviz.py
   DESTINATION lib/${PROJECT_NAME}
+)
+
+# Install RViz config
+install(DIRECTORY rviz
+  DESTINATION share/${PROJECT_NAME}
 )
 
 # Install resource directory for package indexing
