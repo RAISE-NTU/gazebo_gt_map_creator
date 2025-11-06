@@ -1,20 +1,21 @@
 # Semantic Label Capture
 
-The `gazebo_gt_map_creator` plugin now supports capturing semantic labels in point clouds when models have the `gz-sim-label-system` plugin attached.
+The `gazebo_gt_map_creator` plugin now supports capturing semantic labels in point clouds when models have the `ignition-gazebo-label-system` plugin attached.
 
 ## Overview
 
 When enabled, the plugin will:
 - Detect semantic labels from models using the Gazebo Label System plugin
-- Store labels in the point cloud as `PointXYZL` format (point with label)
-- Each collision detected will record which semantic label it belongs to
-- Save labeled point clouds in PCD format for downstream processing
+- Generate RGB colored point clouds where each label gets a unique color
+- Store point clouds in **PointXYZRGB** format (point with RGB color)
+- Each semantic label automatically gets a distinct color using HSV color space
+- Save colored point clouds in PCD format for visualization in RViz2
 
 ## Setup
 
 ### 1. Add Label Plugin to Your Models
 
-Add the `gz-sim-label-system` plugin to each model you want to label:
+Add the `ignition-gazebo-label-system` plugin to each model you want to label:
 
 ```xml
 <model name="box1">
@@ -25,7 +26,7 @@ Add the `gz-sim-label-system` plugin to each model you want to label:
   </link>
   
   <!-- Add semantic label plugin -->
-  <plugin filename="gz-sim-label-system" name="gz::sim::systems::Label">
+  <plugin filename="ignition-gazebo-label-system" name="ignition::gazebo::systems::Label">
     <label>10</label>
   </plugin>
 </model>
@@ -61,12 +62,12 @@ ros2 run gazebo_gt_map_creator save_map.py \
 
 ## Output
 
-When semantic labels are enabled, the generated PCD file will contain `PointXYZL` points:
+When semantic labels are enabled, the generated PCD file will contain **PointXYZRGB** points with colors automatically assigned based on labels:
 
 ```
 # .PCD v0.7 - Point Cloud Data file format
 VERSION 0.7
-FIELDS x y z label
+FIELDS x y z rgb
 SIZE 4 4 4 4
 TYPE F F F U
 COUNT 1 1 1 1
@@ -75,13 +76,34 @@ HEIGHT 1
 VIEWPOINT 0 0 0 1 0 0 0
 POINTS 1000
 DATA ascii
-2.0 0.0 0.5 10
--2.0 2.0 0.5 20
-0.0 -2.0 0.5 30
+2.0 0.0 0.5 16744192    # x y z rgb (label 10 = orange-red)
+-2.0 2.0 0.5 6553600    # label 20 = yellow-green
+0.0 -2.0 0.5 255        # label 30 = blue
 ...
 ```
 
+**Color Assignment**: Each unique label gets a distinct color using HSV color space with the golden angle (137.508°) for maximum visual separation:
+- Label 0 (unlabeled): Gray (128, 128, 128)
+- Label 10: Red-Orange
+- Label 20: Yellow-Green  
+- Label 30: Cyan
+- And so on...
+
 ## Using Labeled Point Clouds
+
+### Visualize in RViz2
+
+The easiest way to view labeled point clouds is with RViz2:
+
+```bash
+# Publish the colored point cloud
+ros2 run gazebo_gt_map_creator publish_pcd_to_rviz.py labeled_map.pcd &
+
+# Launch RViz2
+rviz2 -d $(ros2 pkg prefix gazebo_gt_map_creator)/share/gazebo_gt_map_creator/rviz/view_pointcloud.rviz
+```
+
+**Important**: Set Color Transformer to **RGB8** in RViz2 to see the colors!
 
 ### Python with Open3D
 
@@ -89,32 +111,18 @@ DATA ascii
 import open3d as o3d
 import numpy as np
 
-# Load the labeled point cloud
+# Load the colored point cloud
 pcd = o3d.io.read_point_cloud("labeled_map.pcd")
 points = np.asarray(pcd.points)
+colors = np.asarray(pcd.colors)
 
-# Labels are stored separately in the PCD file
-# You'll need to parse the PCD file manually to extract labels
-with open("labeled_map.pcd", 'r') as f:
-    lines = f.readlines()
-    # Find the start of data
-    data_start = next(i for i, line in enumerate(lines) if line.startswith('DATA'))
-    data_lines = lines[data_start + 1:]
-    
-    labels = []
-    for line in data_lines:
-        parts = line.strip().split()
-        if len(parts) == 4:
-            labels.append(int(parts[3]))  # label is 4th column
+# Colors are already assigned based on labels
+# Each unique label has a distinct color
+print(f"Loaded {len(points)} points")
+print(f"Color range: {colors.min()} to {colors.max()}")
 
-labels = np.array(labels)
-
-# Filter points by label
-label_10_points = points[labels == 10]
-label_20_points = points[labels == 20]
-
-print(f"Points with label 10: {len(label_10_points)}")
-print(f"Points with label 20: {len(label_20_points)}")
+# Visualize
+o3d.visualization.draw_geometries([pcd])
 ```
 
 ### Python with PCL
@@ -122,15 +130,18 @@ print(f"Points with label 20: {len(label_20_points)}")
 ```python
 import pcl
 
-# Load labeled point cloud
+# Load colored point cloud  
 cloud = pcl.load("labeled_map.pcd")
 
-# Access points and labels
-for i in range(cloud.size):
+# PointXYZRGB format: access x, y, z, and rgb
+for i in range(min(cloud.size, 10)):  # First 10 points
     point = cloud[i]
-    x, y, z = point[0], point[1], point[2]
-    label = point[3]
-    print(f"Point ({x}, {y}, {z}) has label {label}")
+    x, y, z, rgb = point[0], point[1], point[2], point[3]
+    # Unpack RGB from uint32
+    r = (int(rgb) >> 16) & 0xFF
+    g = (int(rgb) >> 8) & 0xFF
+    b = int(rgb) & 0xFF
+    print(f"Point ({x:.2f}, {y:.2f}, {z:.2f}) RGB: ({r}, {g}, {b})")
 ```
 
 ### C++ with PCL
@@ -140,17 +151,19 @@ for i in range(cloud.size):
 #include <pcl/point_types.h>
 
 int main() {
-    pcl::PointCloud<pcl::PointXYZL>::Ptr cloud(new pcl::PointCloud<pcl::PointXYZL>);
+    pcl::PointCloud<pcl::PointXYZRGB>::Ptr cloud(new pcl::PointCloud<pcl::PointXYZRGB>);
     
-    if (pcl::io::loadPCDFile<pcl::PointXYZL>("labeled_map.pcd", *cloud) == -1) {
+    if (pcl::io::loadPCDFile<pcl::PointXYZRGB>("labeled_map.pcd", *cloud) == -1) {
         PCL_ERROR("Couldn't read file\n");
         return -1;
     }
     
-    // Process labeled points
+    // Process colored points
     for (const auto& point : cloud->points) {
         std::cout << "Point (" << point.x << ", " << point.y << ", " 
-                  << point.z << ") has label " << point.label << std::endl;
+                  << point.z << ") RGB: (" 
+                  << (int)point.r << ", " << (int)point.g << ", " << (int)point.b 
+                  << ")" << std::endl;
     }
     
     return 0;
@@ -161,12 +174,12 @@ int main() {
 
 Semantic labeled point clouds are useful for:
 
-1. **Object Segmentation**: Separate different objects in the scene
-2. **Scene Understanding**: Identify object types and relationships
-3. **Training Data Generation**: Create labeled datasets for machine learning
-4. **Multi-Robot Navigation**: Different robots can focus on different labeled areas
-5. **Semantic SLAM**: Build maps with object-level understanding
-6. **Collision Avoidance**: Treat different objects with different strategies based on labels
+1. **Visual Segmentation**: View different objects with distinct colors in RViz2
+2. **Object Classification**: Identify object types based on color patterns
+3. **Training Data Generation**: Create colored datasets for machine learning
+4. **Multi-Robot Navigation**: Different robots can identify areas by color
+5. **Semantic SLAM**: Build maps with color-coded object categories
+6. **Collision Avoidance**: Different behaviors based on object colors/labels
 
 ## Example World
 
@@ -175,14 +188,14 @@ See `worlds/example_world.sdf` for a complete example with labeled models:
 ```xml
 <model name="box1">
   <!-- ... -->
-  <plugin filename="gz-sim-label-system" name="gz::sim::systems::Label">
+  <plugin filename="ignition-gazebo-label-system" name="ignition::gazebo::systems::Label">
     <label>10</label>
   </plugin>
 </model>
 
 <model name="box2">
   <!-- ... -->
-  <plugin filename="gz-sim-label-system" name="gz::sim::systems::Label">
+  <plugin filename="ignition-gazebo-label-system" name="ignition::gazebo::systems::Label">
     <label>20</label>
   </plugin>
 </model>
@@ -191,56 +204,47 @@ See `worlds/example_world.sdf` for a complete example with labeled models:
 ## Performance Considerations
 
 - Semantic label capture has minimal performance impact
-- The collision detection process is the same; only label storage is added
-- PCD file size increases slightly (4 bytes per point for the label)
+- The collision detection process is the same; color assignment is added
+- PCD file size is the same (RGB already included in PointXYZRGB format)
 - No impact on 2D map generation speed
+- Color visualization works natively in RViz2 without extra processing
 
 ## Troubleshooting
 
-### Labels are all zeros
+### All points are gray
 
-**Problem**: All points have label 0 in the output PCD file.
+**Problem**: All points appear gray (128,128,128) in RViz2.
 
 **Solutions**:
-1. Ensure models have the `gz-sim-label-system` plugin configured
-2. Verify the `<label>` value is set in the plugin
+1. Ensure models have the `ignition-gazebo-label-system` plugin configured
+2. Verify the `<label>` value is set in the plugin (not 0)
 3. Check that you used the `--capture-labels` flag
+4. Make sure Color Transformer is set to **RGB8** in RViz2
 
-### Missing labels for some objects
+### Missing colors for some objects
 
-**Problem**: Some objects don't have labels in the point cloud.
+**Problem**: Some objects don't show up with colors in the point cloud.
 
 **Solutions**:
 1. Make sure the label plugin is added to the model, not the link
 2. Verify the model is marked as `<static>true</static>`
 3. Check collision geometries are properly defined
+4. Ensure plugin filename is `ignition-gazebo-label-system` (without .so)
 
 ### How to verify labels are working
 
-Before running map generation, you can verify labels are properly configured:
+Check the console output when generating the map:
 
 ```bash
-# Launch Gazebo
-ign gazebo worlds/example_world.sdf
-
-# In another terminal, list all entities and their components
-ign model --list
+# You should see messages like:
+[INFO] Visual 'visual' has label: 100
+[INFO] Saved labeled colored point cloud with 14478 points
+[INFO] Point cloud contains 2 unique colors/labels
 ```
-
-The models should show the Label component when properly configured.
-
-## Future Enhancements
-
-Planned improvements for semantic label support:
-
-- [ ] Color-coded visualization of labels in PNG output
-- [ ] Label-specific occupancy maps (separate map per label)
-- [ ] Statistical output showing point distribution by label
-- [ ] Support for hierarchical labels
-- [ ] Export to semantic segmentation formats (e.g., COCO, Pascal VOC)
 
 ## Related Documentation
 
 - [Gazebo Label System Plugin](https://gazebosim.org/api/sim/7/classgz_1_1sim_1_1systems_1_1Label.html)
-- [PCL Point Types](https://pointclouds.org/documentation/point__types_8hpp_source.html)
+- [PCL PointXYZRGB](https://pointclouds.org/documentation/classpcl_1_1_point_x_y_z_r_g_b.html)
+- [RViz2 Visualization](RVIZ_VISUALIZATION.md)
 - [Open3D Point Cloud](http://www.open3d.org/docs/release/tutorial/geometry/pointcloud.html)

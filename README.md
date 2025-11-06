@@ -235,7 +235,7 @@ Enable semantic label capture for advanced applications:
 # Add label plugins to your models in the world file
 <model name="obstacle_1">
   <!-- ... model definition ... -->
-  <plugin filename="gz-sim-label-system" name="gz::sim::systems::Label">
+  <plugin filename="ignition-gazebo-label-system" name="ignition::gazebo::systems::Label">
     <label>10</label>
   </plugin>
 </model>
@@ -249,7 +249,7 @@ ros2 run gazebo_gt_map_creator save_map.py \
   --capture-labels
 ```
 
-The generated PCD file will contain `PointXYZL` format with label information for each point. See [SEMANTIC_LABELS.md](SEMANTIC_LABELS.md) for detailed usage examples and applications.
+The generated PCD file will contain RGB point clouds with colors automatically assigned based on semantic labels. Each unique label gets a distinct color using HSV color space for easy visualization in RViz2. See [SEMANTIC_LABELS.md](SEMANTIC_LABELS.md) for detailed usage examples and applications.
 
 ## Troubleshooting
 
