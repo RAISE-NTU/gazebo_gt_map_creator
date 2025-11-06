@@ -42,14 +42,6 @@ When you generate a map, the following files are created:
 
 ```bash
 # Install system dependencies
-sudo apt-get install \
-    ros-${ROS_DISTRO}-ignition-gazebo6 \
-    ros-${ROS_DISTRO}-ros-gz-bridge \
-    ros-${ROS_DISTRO}-ros-gz-sim \
-    libboost-dev \
-    libpcl-dev \
-    liboctomap-dev \
-    libpng-dev
 
 # Clone the interface package (if not already in your workspace)
 cd ~/your_ws/src
@@ -100,7 +92,7 @@ ign gazebo my_world.sdf
 
 ### 3. Generate the Map
 
-#### Option A: Using Command-Line Arguments (Recommended)
+#### Using Command-Line Arguments
 
 ```bash
 # Basic usage
@@ -137,46 +129,7 @@ ros2 run gazebo_gt_map_creator save_map.py --help
 - `--threshold, -t`: Occupancy threshold 0-100 (default: 50)
 - `--skip-vertical-scan, -s`: Flag for faster 2D-only maps
 - `--range-multiplier, -m`: Ray casting range (default: 1.5)
-
-#### Option B: Using the Python Script (Legacy)
-
-```bash
-ros2 service call /world/save_map gazebo_map_creator_interface/srv/MapRequest \
-  "{upperleft: {x: -10.0, y: 10.0, z: 2.0}, 
-    lowerright: {x: 10.0, y: -10.0, z: 0.0},
-    resolution: 0.05,
-    threshold_2d: 50,
-    filename: '/tmp/my_map',
-    skip_vertical_scan: true,
-    range_multiplier: 1.5}"
-```
-
-#### Option C: Using Python Code
-
-```python
-import rclpy
-from rclpy.node import Node
-from gazebo_map_creator_interface.srv import MapRequest
-from geometry_msgs.msg import Point
-
-rclpy.init()
-node = Node('my_map_creator')
-client = node.create_client(MapRequest, '/world/save_map')
-client.wait_for_service()
-
-request = MapRequest.Request()
-request.upperleft = Point(x=-10.0, y=10.0, z=2.0)
-request.lowerright = Point(x=10.0, y=-10.0, z=0.0)
-request.resolution = 0.05
-request.filename = '/tmp/my_map'
-request.skip_vertical_scan = True
-
-future = client.call_async(request)
-rclpy.spin_until_future_complete(node, future)
-
-if future.result().success:
-    print("Map created successfully!")
-```
+- `--capture-labels, -c`: Enable semantic label capture for colored point clouds
 
 ## Configuration Parameters
 
@@ -191,6 +144,7 @@ if future.result().success:
 | `filename` | string | - | Output filename (without extension) |
 | `skip_vertical_scan` | bool | false | Skip 3D scan for faster 2D maps |
 | `range_multiplier` | float | 1.5 | Ray casting range multiplier |
+| `capture_semantic_labels` | bool | false | Enable semantic label capture for RGB point clouds |
 
 ### Understanding Coordinates
 
