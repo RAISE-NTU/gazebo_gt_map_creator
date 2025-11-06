@@ -117,6 +117,14 @@ ros2 run gazebo_gt_map_creator save_map.py \
   -r 0.05 \
   -s
 
+# With semantic labels (colored point cloud)
+ros2 run gazebo_gt_map_creator save_map.py \
+  -f ~/maps/labeled_map \
+  -u -10 10 2 \
+  -l 10 -10 0 \
+  -r 0.05 \
+  --capture-labels
+
 # View all options
 ros2 run gazebo_gt_map_creator save_map.py --help
 ```
