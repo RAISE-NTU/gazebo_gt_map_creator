@@ -362,9 +362,10 @@ ros2 run gazebo_gt_map_creator save_map.py \
 
 ### Maze World with Semantic Labels
 
-The package includes a `maze.sdf` world file that demonstrates semantic labeling:
+The package includes a `maze.sdf` world file that demonstrates semantic labeling. The image below shows the resulting colored point cloud in RViz2, where different colors represent different semantic labels:
 
 ![Maze Point Cloud with Semantic Labels](resource/semantic_labels.png)
+*Yellow points: Outer walls (label 100) | Green points: Inner walls (label 200)*
 
 ```bash
 # 1. Launch the maze world
@@ -384,7 +385,7 @@ ros2 run gazebo_gt_map_creator publish_pcd_to_rviz.py $PWD/maze_labeled.pcd &
 rviz2 -d $(ros2 pkg prefix gazebo_gt_map_creator)/share/gazebo_gt_map_creator/rviz/view_pointcloud.rviz
 ```
 
-The maze world demonstrates:
+**What this demonstrates:**
 - **Label 100**: Outer walls (4 walls forming the perimeter)
 - **Label 200**: Inner walls (4 separate obstacles inside the maze)
 - **Automatic color assignment**: Each label gets a unique color based on HSV color space
